@@ -1,0 +1,48 @@
+
+name: Compilar MotoNav 1.75C
+
+on:
+  workflow_dispatch:
+
+jobs:
+  firmware:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Descargar proyecto
+        uses: actions/checkout@v4
+
+      - name: Instalar Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Instalar ESP32
+        run: |
+          arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core install esp32:esp32@3.3.10 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+
+      - name: Configurar placa 1.75C
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("firmware/build.py")
+          s = p.read_text()
+
+          old = "FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi,CDCOnBoot=cdc"
+          new = "FlashSize=32M,FlashMode=dio,FlashFreq=40,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi,CDCOnBoot=cdc"
+
+          assert old in s, "Configuracion original no encontrada"
+          s = s.replace(old, new)
+          s = s.replace("'flashSize': '16MB'", "'flashSize': '32MB'")
+          p.write_text(s)
+          PY
+
+      - name: Compilar firmware
+        run: python3 firmware/build.py
+
+      - name: Publicar archivos BIN
+        uses: actions/upload-artifact@v4
+        with:
+          name: MotoNav-ESP32S3-175C
+          path: firmware/dist/175/panel0/*.bin
+          if-no-files-found: error
